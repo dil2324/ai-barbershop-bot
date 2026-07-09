@@ -55,7 +55,7 @@ def get_dates_kb():
     builder.adjust(3)
     return builder.as_markup()
 
-def get_times_kb(date):
+def get_times_kb(date: str):
     builder = InlineKeyboardBuilder()
     times = ["10:00" , "12:00", "14:00","16:00","18:00","20:00"]
     for time in times:
