@@ -20,6 +20,7 @@ def init_db():
     CREATE TABLE IF NOT EXISTS bookings (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER,
+        username TEXT,
         date TEXT,
         time TEXT,
         service TEXT,
@@ -36,11 +37,11 @@ def add_name(user_id: int,name: str,phone: str):
     conn.commit()
     conn.close()
 
-def add_booking(user_id: int, date: str,time: str,service: str):
+def add_booking(user_id: int,username: str, date: str,time: str,service: str):
     conn = get_connection()
     cursor = conn.cursor()
     
-    cursor.execute("INSERT  INTO bookings(user_id,date,time,service) VALUES (?,?,?,?)",(user_id,date,time,service))
+    cursor.execute("INSERT  INTO bookings(user_id,username,date,time,service) VALUES (?,?,?,?,?)",(user_id,username,date,time,service))
     conn.commit()
     conn.close()
     
@@ -52,3 +53,10 @@ def get_user_bookings(user_id: int):
     conn.close()
     return result
     
+def is_time_busy(date: str,time: str):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM bookings WHERE date = ? AND time = ? ", (date,time))
+    result = cursor.fetchone()
+    conn.close()
+    return result is not None
