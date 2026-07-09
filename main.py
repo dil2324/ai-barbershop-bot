@@ -1,13 +1,30 @@
 import asyncio
 from aiogram import Bot,Dispatcher, types
+from aiogram import F
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters import Command 
-from aiogram.utils.keyboard import ReplyKeyboardBuilder
+from aiogram.utils.keyboard import (
+    ReplyKeyboardBuilder,InlineKeyboardBuilder
+    )
 import database as db
+from dotenv import load_dotenv
+import os
+from datetime import datetime , timedelta 
 
-TOKEN=""
+load_dotenv()
+TOKEN=os.getenv("BOT_TOKEN")
+
+if TOKEN is None:
+    raise ValueError("Токен не найден. Проверь файл .env")
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
+
+class Booking(StatesGroup):
+    choosing_service= State()
+    choosing_date = State()
+    choosing_time = State()
 
 def get_main_kb():
     builder= ReplyKeyboardBuilder()
@@ -19,8 +36,34 @@ def get_main_kb():
         types.KeyboardButton(text="Записаться"),
         types.KeyboardButton(text="Мои записи")
     )
-    
     return builder.as_markup(resize_keyboard=True)
+
+def get_services_kb():
+    builder = InlineKeyboardBuilder()
+    builder.add(types.InlineKeyboardButton(text = "Стрижка - 4000тг", callback_data = "service_Стрижка"))
+    builder.add(types.InlineKeyboardButton(text = "Бритье - 3000тг", callback_data = "service_Бритье"))
+    builder.add(types.InlineKeyboardButton(text = "Комплекс - 7500тг", callback_data = "service_Комплекс"))
+    return builder.as_markup()
+
+def get_dates_kb():
+    builder = InlineKeyboardBuilder()
+    for i in range(1,8):
+        date = datetime.now() + timedelta(days=i)
+        date_str = date.strftime("%Y-%m-%d")
+        date_show= date.strftime("%d.%m")
+        builder.add(types.InlineKeyboardButton(text = date_show,callback_data=f"date_{date_str}"))
+    builder.adjust(3)
+    return builder.as_markup()
+
+def get_times_kb(date):
+    builder = InlineKeyboardBuilder()
+    times = ["10:00" , "12:00", "14:00","16:00","18:00","20:00"]
+    for time in times:
+        if not db.is_time_busy(date,time):
+            builder.add(types.InlineKeyboardButton(text=time,callback_data=f"time_{time}"))
+    builder.adjust(3)
+    return builder.as_markup()
+    
 
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
@@ -33,7 +76,7 @@ async def cmd_start(message: types.Message):
         reply_markup=get_main_kb()
     )
 
-    
+@dp.message(F.text=="Услуги и цены")    
 async def show_services(message: types.Message):
     text = (
         "Наши услуги: \n\n"
@@ -44,11 +87,11 @@ async def show_services(message: types.Message):
     )
     await message.answer(text)
 
-
+@dp.message(F.text=="Где вы находитесь?")
 async def show_address(message: types.Message):
     await message.answer("Мы находимся: г.Орал ул. твоя 12.\n Работаем с 10:00-21:00")
     
-
+@dp.message(F.text == "Мои записи")
 async def show_bookings(message: types.Message):
     if not message.from_user: 
         return
@@ -62,18 +105,60 @@ async def show_bookings(message: types.Message):
     await message.answer(text)
     
 
+@dp.message(F.text == "Записаться")
+async def start_booking(message: types.Message, state: FSMContext):
+    await state.set_state(Booking.choosing_service)
+    await message.answer("Выбери услугу", reply_markup=get_services_kb())
+    
+@dp.callback_query(Booking.choosing_service, F.data.startswith("service_"))
+async def process_service(callback: types.CallbackQuery, state: FSMContext):
+    if  callback.data is None:
+        return
+
+    service = callback.data.split("_")[1]
+    await state.update_data(service=service)
+    await state.set_state(Booking.choosing_date)
+    
+    if isinstance(callback.message, types.Message):
+        await callback.message.edit_text(f"Услуга: {service}\n\nВыбери дату:", reply_markup=get_dates_kb()) 
+
+@dp.callback_query( Booking.choosing_date, F.data.startswith("date_"))
+async def process_date(callback: types.CallbackQuery, state: FSMContext):
+    if callback.data is None:
+        return
+    
+    date = callback.data.split("_")[1]
+    await state.update_data(date=date)
+    await state.set_state(Booking.choosing_time)
+    if isinstance(callback.message, types.Message):
+        
+        await callback.message.edit_text(f"Дата: {date}\n\nВыбери время:", reply_markup=get_times_kb(date))
+
+@dp.callback_query(Booking.choosing_time, F.data.startswith("time_"))
+async def process_time(callback: types.CallbackQuery, state: FSMContext):
+    if callback.data is None:
+        return
+    
+    time = callback.data.split("_")[1]
+    data = await state.get_data()
+    service= data['service']
+    date = data['date']
+    
+    db.add_booking(
+        user_id=callback.from_user.id,
+        username = callback.from_user.username or "",
+        service=service,
+        date=date,
+        time=time
+    )
+    
+    if isinstance(callback.message, types.Message):
+        await callback.message.edit_text(f"Готово\n\n Ты записан на: \n{service}\n{date} в {time}\n\nЖдем тебя!")
+    await state.clear()     
+    
 @dp.message()
 async def handle_all(message: types.Message):
-    if message.text == "Услуги и цены":
-        await show_services(message)
-    elif message.text == "Где вы находитесь?":
-        await show_address(message)
-    elif message.text == "Мои записи":
-        await show_bookings(message)
-    elif message.text == "Записаться":
-        await message.answer("Скро добавлю сюда выбор для даты и время")
-    else:
-        print("Неизвестная команда")
+    await message.answer("Неизвестная команда. Нажми кнопку из меню")
             
 
 async def main():
