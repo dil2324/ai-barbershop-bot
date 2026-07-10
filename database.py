@@ -24,6 +24,7 @@ def init_db():
         date TEXT,
         time TEXT,
         service TEXT,
+        phone TEXT,
         FOREIGN KEY (user_id) REFERENCES clients(user_id)
     )
     ''')
@@ -37,11 +38,11 @@ def add_name(user_id: int,name: str,phone: str):
     conn.commit()
     conn.close()
 
-def add_booking(user_id: int,username: str, date: str,time: str,service: str):
+def add_booking(user_id: int,username: str, date: str,time: str,service: str,phone: str):
     conn = get_connection()
     cursor = conn.cursor()
     
-    cursor.execute("INSERT  INTO bookings(user_id,username,date,time,service) VALUES (?,?,?,?,?)",(user_id,username,date,time,service))
+    cursor.execute("INSERT  INTO bookings(user_id,username,date,time,service,phone) VALUES (?,?,?,?,?,?)",(user_id,username,date,time,service,phone))
     conn.commit()
     conn.close()
     
@@ -60,3 +61,11 @@ def is_time_busy(date: str,time: str):
     result = cursor.fetchone()
     conn.close()
     return result is not None
+
+def get_bookings_by_date(date: str):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT time,service,username,phone FROM bookings WHERE date=? ORDER BY time",(date,))
+    result = cursor.fetchall()
+    conn.close()
+    return result     
