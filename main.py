@@ -10,13 +10,20 @@ from aiogram.utils.keyboard import (
 import database as db
 from dotenv import load_dotenv
 import os
-from datetime import datetime , timedelta 
+from datetime import datetime , timedelta
+
 
 load_dotenv()
 TOKEN=os.getenv("BOT_TOKEN")
+admin = os.getenv("ADMIN_ID")
 
-if TOKEN is None:
+if TOKEN is None :
     raise ValueError("Токен не найден. Проверь файл .env")
+
+if admin is None :
+    raise ValueError("ADMIN_ID не найден. Проверь файл .env")
+
+ADMIN_ID = int(admin)
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
@@ -25,6 +32,7 @@ class Booking(StatesGroup):
     choosing_service= State()
     choosing_date = State()
     choosing_time = State()
+    getting_phone= State()
 
 def get_main_kb():
     builder= ReplyKeyboardBuilder()
@@ -43,6 +51,7 @@ def get_services_kb():
     builder.add(types.InlineKeyboardButton(text = "Стрижка - 4000тг", callback_data = "service_Стрижка"))
     builder.add(types.InlineKeyboardButton(text = "Бритье - 3000тг", callback_data = "service_Бритье"))
     builder.add(types.InlineKeyboardButton(text = "Комплекс - 7500тг", callback_data = "service_Комплекс"))
+    builder.adjust(1)
     return builder.as_markup()
 
 def get_dates_kb():
@@ -55,7 +64,7 @@ def get_dates_kb():
     builder.adjust(3)
     return builder.as_markup()
 
-def get_times_kb(date: str):
+def get_times_kb(date: str ):
     builder = InlineKeyboardBuilder()
     times = ["10:00" , "12:00", "14:00","16:00","18:00","20:00"]
     for time in times:
@@ -103,7 +112,30 @@ async def show_bookings(message: types.Message):
     else:
         text = "У вас нет записей"
     await message.answer(text)
+
+@dp.message(Command("admin"))
+async def admin_panel(message: types.Message):
+    user = message.from_user
     
+    if user is None:
+        return
+    
+    if user.id != ADMIN_ID:
+        await message.answer("У вас нет доступа")
+        return
+    
+    today = datetime.now().strftime("%Y-%m-%d")
+    bookings = db.get_bookings_by_date(today)
+    
+    if not bookings :
+        await message.answer("На сегодня {today} записей нет")
+        return
+    
+    text = f"Записи на сегодня {today}: \n\n"
+    for time, service, username,phone in bookings:
+        text += f"{time} - {service}\n @{username}\n {phone}\n\n"
+    await message.answer(text)
+        
 
 @dp.message(F.text == "Записаться")
 async def start_booking(message: types.Message, state: FSMContext):
@@ -140,20 +172,38 @@ async def process_time(callback: types.CallbackQuery, state: FSMContext):
         return
     
     time = callback.data.split("_")[1]
+    await state.update_data(time=time)
+    await state.set_state(Booking.getting_phone)
+    if isinstance(callback.message, types.Message):
+        await callback.message.edit_text(f"Время: {time}\n\nОтправь свой номер телефона для связи:")
+    await callback.answer()
+
+@dp.message(Booking.getting_phone)
+async def process_phone(message: types.Message, state: FSMContext):
+    
+    if message.from_user is None:
+        return
+    
+    phone = message.text
+    
+    if phone is None:
+        return
+    
     data = await state.get_data()
-    service= data['service']
-    date = data['date']
+    
+    name = message.from_user.first_name or "User"
+    db.add_name( message.from_user.id,name, phone)
     
     db.add_booking(
-        user_id=callback.from_user.id,
-        username = callback.from_user.username or "",
-        service=service,
-        date=date,
-        time=time
+        user_id=message.from_user.id,
+        username = message.from_user.username or "",
+        service=data['service'],
+        date=data['date'],
+        time=data['time'],
+        phone=phone
     )
     
-    if isinstance(callback.message, types.Message):
-        await callback.message.edit_text(f"Готово\n\n Ты записан на: \n{service}\n{date} в {time}\n\nЖдем тебя!")
+    await message.answer(f"Готово\n\n Ты записан на: \n{data['service']}\n{data['date']} в {data['time']}\n\nЖдем тебя!")
     await state.clear()     
     
 @dp.message()
