@@ -25,6 +25,8 @@ def init_db():
         time TEXT,
         service TEXT,
         phone TEXT,
+        reminded_24h INTEGER DEFAULT 0,
+        reminded_3h INTEGER DEFAULT 0,
         FOREIGN KEY (user_id) REFERENCES clients(user_id)
     )
     ''')
