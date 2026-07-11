@@ -48,9 +48,9 @@ def get_main_kb():
 
 def get_services_kb():
     builder = InlineKeyboardBuilder()
-    builder.add(types.InlineKeyboardButton(text = "Стрижка - 4000тг", callback_data = "service_Стрижка"))
-    builder.add(types.InlineKeyboardButton(text = "Бритье - 3000тг", callback_data = "service_Бритье"))
-    builder.add(types.InlineKeyboardButton(text = "Комплекс - 7500тг", callback_data = "service_Комплекс"))
+    builder.add(types.InlineKeyboardButton(text = "Стрижка - 3500тг", callback_data = "service_Стрижка"))
+    builder.add(types.InlineKeyboardButton(text = "Бритье - 5000тг", callback_data = "service_Бритье"))
+    builder.add(types.InlineKeyboardButton(text = "Комплекс - 7000тг", callback_data = "service_Комплекс"))
     builder.adjust(1)
     return builder.as_markup()
 
@@ -66,7 +66,7 @@ def get_dates_kb():
 
 def get_times_kb(date: str ):
     builder = InlineKeyboardBuilder()
-    times = ["10:00" , "12:00", "14:00","16:00","18:00","20:00"]
+    times = ["12:00" , "14:00", "15:00","16:00","18:00","20:00"]
     for time in times:
         if not db.is_time_busy(date,time):
             builder.add(types.InlineKeyboardButton(text=time,callback_data=f"time_{time}"))
@@ -98,7 +98,7 @@ async def show_services(message: types.Message):
 
 @dp.message(F.text=="Где вы находитесь?")
 async def show_address(message: types.Message):
-    await message.answer("Мы находимся: г.Орал ул. твоя 12.\n Работаем с 10:00-21:00")
+    await message.answer("Мы находимся: г.Орал ул. Алмазова.\n Работаем с 10:00-21:00")
     
 @dp.message(F.text == "Мои записи")
 async def show_bookings(message: types.Message):
@@ -128,7 +128,7 @@ async def admin_panel(message: types.Message):
     bookings = db.get_bookings_by_date(today)
     
     if not bookings :
-        await message.answer("На сегодня {today} записей нет")
+        await message.answer(f"На сегодня {today} записей нет")
         return
     
     text = f"Записи на сегодня {today}: \n\n"
@@ -209,10 +209,48 @@ async def process_phone(message: types.Message, state: FSMContext):
 @dp.message()
 async def handle_all(message: types.Message):
     await message.answer("Неизвестная команда. Нажми кнопку из меню")
+    
+async def reminder_task():
+    while True:
+        now = datetime.now()
+        
+        tomorrow = (now + timedelta(days=1)).strftime("%Y-%m-%d")
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT id,user_id,time,service FROM bookings WHERE date=? AND reminded_24h=0",(tomorrow,))
+        bookings_24h = cursor.fetchall()
+        
+        for booking_id , user_id,time, service in bookings_24h:
+            try:
+                cursor.execute("SELECT user_id FROM bookings WHERE id=?",(booking_id,))
+                user_id = cursor.fetchone()[0]
+                await bot.send_message(user_id, f"Напоминание :\nЗавтра в {time} у тебя {service}\n Ждем в барбершопе!")
+                cursor.execute("UPDATE bookings SET reminded_24h=1 WHERE id=?",(booking_id,))
+            except:
+                pass
+        
+        today = now.strftime("%Y-%m-%d")
+        three_hours_later = (now + timedelta(hours=3)).strftime("%H:%M")
+        cursor.execute("SELECT id, user_id, time, service FROM bookings WHERE date=? AND time=? AND reminded_3h=0", (today,three_hours_later))
+        bookings_3h = cursor.fetchall()
+        
+        for booking_id, user_id, time, service in bookings_3h:
+            try:
+                await bot.send_message(user_id, f" Через 3 часа.\n Сегодня в {time} : {service}")
+                cursor.execute("UPDATE bookings SET reminded_3h=1 WHERE id=?", (booking_id,))
+            except:
+                pass
+        
+        
+        conn.commit()
+        conn.close()
+        
+        await asyncio.sleep(600)  
             
 
 async def main():
     db.init_db()
+    asyncio.create_task(reminder_task())
     print("Бот запущен...")
     await dp.start_polling(bot) 
     
