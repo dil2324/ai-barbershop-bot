@@ -30,6 +30,7 @@ dp = Dispatcher()
 
 class Booking(StatesGroup):
     choosing_service= State()
+    choosing_master = State()
     choosing_date = State()
     choosing_time = State()
     getting_phone= State()
@@ -54,6 +55,20 @@ def get_services_kb():
     builder.adjust(1)
     return builder.as_markup()
 
+def get_masters_kb():
+    conn = db.get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name FROM masters")
+    masters = cursor.fetchall()
+    conn.close()
+    
+    builder = InlineKeyboardBuilder()
+    for id, name in masters:
+        builder.add(types.InlineKeyboardButton(text=name, callback_data=f"master_{id}"))
+    builder.adjust(2)
+    return builder.as_markup()
+    
+
 def get_dates_kb():
     builder = InlineKeyboardBuilder()
     for i in range(1,8):
@@ -64,11 +79,11 @@ def get_dates_kb():
     builder.adjust(3)
     return builder.as_markup()
 
-def get_times_kb(date: str ):
+def get_times_kb(date: str,master_id: int ):
     builder = InlineKeyboardBuilder()
     times = ["12:00" , "14:00", "15:00","16:00","18:00","20:00"]
     for time in times:
-        if not db.is_time_busy(date,time):
+        if not db.is_time_busy(date,time,master_id):
             builder.add(types.InlineKeyboardButton(text=time,callback_data=f"time_{time}"))
     builder.adjust(3)
     return builder.as_markup()
@@ -149,10 +164,24 @@ async def process_service(callback: types.CallbackQuery, state: FSMContext):
 
     service = callback.data.split("_")[1]
     await state.update_data(service=service)
+    await state.set_state(Booking.choosing_master)
+    
+    if isinstance(callback.message, types.Message):
+        await callback.message.edit_text(f"Услуга: {service}\n\nВыбери мастера:", reply_markup=get_masters_kb()) 
+
+@dp.callback_query(Booking.choosing_master, F.data.startswith("master_"))
+async def process_master(callback: types.CallbackQuery, state: FSMContext):
+    if callback.data is None:
+        return
+    
+    master_id = int(callback.data.split("_")[1])
+    await state.update_data(master_id=master_id)
     await state.set_state(Booking.choosing_date)
     
     if isinstance(callback.message, types.Message):
-        await callback.message.edit_text(f"Услуга: {service}\n\nВыбери дату:", reply_markup=get_dates_kb()) 
+        await callback.message.edit_text("Выбери дату:", reply_markup=get_dates_kb())
+    
+    await callback.answer()
 
 @dp.callback_query( Booking.choosing_date, F.data.startswith("date_"))
 async def process_date(callback: types.CallbackQuery, state: FSMContext):
@@ -162,10 +191,14 @@ async def process_date(callback: types.CallbackQuery, state: FSMContext):
     date = callback.data.split("_")[1]
     await state.update_data(date=date)
     await state.set_state(Booking.choosing_time)
+    
+    data = await state.get_data()
     if isinstance(callback.message, types.Message):
         
-        await callback.message.edit_text(f"Дата: {date}\n\nВыбери время:", reply_markup=get_times_kb(date))
+        await callback.message.edit_text(f"Дата: {date}\n\nВыбери время:", reply_markup=get_times_kb(date, data['master_id']))
 
+    await callback.answer()
+    
 @dp.callback_query(Booking.choosing_time, F.data.startswith("time_"))
 async def process_time(callback: types.CallbackQuery, state: FSMContext):
     if callback.data is None:
@@ -200,7 +233,8 @@ async def process_phone(message: types.Message, state: FSMContext):
         service=data['service'],
         date=data['date'],
         time=data['time'],
-        phone=phone
+        phone=phone,
+        master_id=data['master_id']
     )
     
     await message.answer(f"Готово\n\n Ты записан на: \n{data['service']}\n{data['date']} в {data['time']}\n\nЖдем тебя!")
