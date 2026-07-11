@@ -15,6 +15,16 @@ def init_db():
         phone TEXT
     ) 
     ''')
+    
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS masters(
+        id INT PRIMARY KEY,
+        name TEXT
+    )           
+    ''')
+                 
+    cursor.execute("INSERT OR IGNORE INTO masters (id, name) VALUES (1, 'Диас')")
+    cursor.execute("INSERT OR IGNORE INTO masters (id,name) VALUES (2, 'Арман')")
 
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS bookings (
@@ -25,11 +35,14 @@ def init_db():
         time TEXT,
         service TEXT,
         phone TEXT,
+        master_id INTEGER,
         reminded_24h INTEGER DEFAULT 0,
         reminded_3h INTEGER DEFAULT 0,
-        FOREIGN KEY (user_id) REFERENCES clients(user_id)
+        FOREIGN KEY (user_id) REFERENCES clients(user_id),
+        FOREIGN KEY (master_id) REFERENCES masters(id)
     )
     ''')
+    
     conn.commit()
     conn.close()
 
@@ -40,11 +53,11 @@ def add_name(user_id: int,name: str,phone: str):
     conn.commit()
     conn.close()
 
-def add_booking(user_id: int,username: str, date: str,time: str,service: str,phone: str):
+def add_booking(user_id: int,username: str, date: str,time: str,service: str,phone: str, master_id: int):
     conn = get_connection()
     cursor = conn.cursor()
     
-    cursor.execute("INSERT  INTO bookings(user_id,username,date,time,service,phone) VALUES (?,?,?,?,?,?)",(user_id,username,date,time,service,phone))
+    cursor.execute("INSERT  INTO bookings(user_id,username,date,time,service,phone,master_id) VALUES (?,?,?,?,?,?,?)",(user_id,username,date,time,service,phone,master_id))
     conn.commit()
     conn.close()
     
@@ -56,10 +69,10 @@ def get_user_bookings(user_id: int):
     conn.close()
     return result
     
-def is_time_busy(date: str,time: str):
+def is_time_busy(date: str,time: str, master_id: int):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM bookings WHERE date = ? AND time = ? ", (date,time))
+    cursor.execute("SELECT * FROM bookings WHERE date = ? AND time = ? AND master_id = ? ", (date,time,master_id))
     result = cursor.fetchone()
     conn.close()
     return result is not None
