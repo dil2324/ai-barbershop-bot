@@ -19,6 +19,7 @@ Python 3.12,python-telegramm-bot,sqlite3,aiogram 3
 ## A guide on how to turn on a bot in telegram
 
 ```bash
+git clone https://github.com/dil2324/ai-barbershop-bot
 cd desktop
 cd ai-bot
 
