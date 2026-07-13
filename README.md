@@ -14,9 +14,13 @@
 
 ## Stack
 
-Python 3.12,python-telegramm-bot,sqlite3
+Python 3.12,python-telegramm-bot,sqlite3,aiogram 3
 
 ## A guide on how to turn on a bot in telegram
+
+```bash
+cd desktop
+cd ai-bot
 
 
 
