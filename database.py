@@ -23,8 +23,8 @@ def init_db():
     )           
     ''')
                  
-    cursor.execute("INSERT OR IGNORE INTO masters (id, name) VALUES (1, 'Диас')")
-    cursor.execute("INSERT OR IGNORE INTO masters (id,name) VALUES (2, 'Арман')")
+    cursor.execute("INSERT OR IGNORE INTO masters (id, name) VALUES (1, 'Dias')")
+    cursor.execute("INSERT OR IGNORE INTO masters (id,name) VALUES (2, 'Arman')")
 
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS bookings (
