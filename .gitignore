@@ -1,3 +1,4 @@
+
 ### AL ###
 #Template for AL projects for Dynamics 365 Business Central
 #launch.json folder
@@ -26,3 +27,12 @@ TestResults.xml
 venv
 .venv/
 
+
+.env
+venv/
+__pycache__/
+*.pyc
+.pycache/
+__pycache__
+__pycache__/database.cpython-312.pyc
+barber.db

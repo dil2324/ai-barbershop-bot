@@ -1,3 +1,4 @@
+
 import sqlite3
 
 DB_NAME = 'barber.db'
@@ -84,3 +85,4 @@ def get_bookings_by_date(date: str):
     result = cursor.fetchall()
     conn.close()
     return result     
+
