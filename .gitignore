@@ -22,3 +22,7 @@ rad.json
 TestResults.xml
 
 .env
+
+venv
+.venv/
+
